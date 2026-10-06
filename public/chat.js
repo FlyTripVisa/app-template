@@ -1,16 +1,19 @@
 /**
  * LLM Chat App Frontend
- *
- * Handles the chat UI interactions and communication with the backend API.
+ * Works with the LlamaIndex-style index.html
+ * Handles streaming SSE responses from /api/chat
  */
 
-// DOM elements
-const chatMessages = document.getElementById("chat-messages");
-const userInput = document.getElementById("user-input");
-const sendButton = document.getElementById("send-button");
-const typingIndicator = document.getElementById("typing-indicator");
+// ---------- DOM elements ----------
+const messagesList    = document.getElementById("messagesList");
+const welcomeScreen   = document.getElementById("welcomeScreen");
+const messageArea     = document.getElementById("messageArea");
+const chatForm        = document.getElementById("chatForm");
+const userInput       = document.getElementById("messageInput");
+const sendButton      = document.getElementById("sendButton");
+const typingIndicator = document.getElementById("typingIndicator");
 
-// Chat state
+// ---------- Chat state ----------
 let chatHistory = [
 	{
 		role: "assistant",
@@ -20,13 +23,14 @@ let chatHistory = [
 ];
 let isProcessing = false;
 
-// Auto-resize textarea as user types
+// ---------- Auto-resize textarea ----------
 userInput.addEventListener("input", function () {
 	this.style.height = "auto";
-	this.style.height = this.scrollHeight + "px";
+	this.style.height = Math.min(this.scrollHeight, 400) + "px";
+	updateSendButton();
 });
 
-// Send message on Enter (without Shift)
+// ---------- Enter to send, Shift+Enter for newline ----------
 userInput.addEventListener("keydown", function (e) {
 	if (e.key === "Enter" && !e.shiftKey) {
 		e.preventDefault();
@@ -34,180 +38,45 @@ userInput.addEventListener("keydown", function (e) {
 	}
 });
 
-// Send button click handler
-sendButton.addEventListener("click", sendMessage);
+// ---------- Form submit (send button click) ----------
+chatForm.addEventListener("submit", function (e) {
+	e.preventDefault();
+	sendMessage();
+});
 
-/**
- * Sends a message to the chat API and processes the response
- */
-async function sendMessage() {
-	const message = userInput.value.trim();
+// ---------- Enable/disable send button ----------
+function updateSendButton() {
+	const hasText = userInput.value.trim().length > 0;
+	sendButton.disabled = !hasText || isProcessing;
+}
 
-	// Don't send empty messages
-	if (message === "" || isProcessing) return;
-
-	// Disable input while processing
-	isProcessing = true;
-	userInput.disabled = true;
-	sendButton.disabled = true;
-
-	// Add user message to chat
-	addMessageToChat("user", message);
-
-	// Clear input
-	userInput.value = "";
-	userInput.style.height = "auto";
-
-	// Show typing indicator
-	typingIndicator.classList.add("visible");
-
-	// Add message to history
-	chatHistory.push({ role: "user", content: message });
-
-	try {
-		// Create new assistant response element
-		const assistantMessageEl = document.createElement("div");
-		assistantMessageEl.className = "message assistant-message";
-		assistantMessageEl.innerHTML = "<p></p>";
-		chatMessages.appendChild(assistantMessageEl);
-		const assistantTextEl = assistantMessageEl.querySelector("p");
-
-		// Scroll to bottom
-		chatMessages.scrollTop = chatMessages.scrollHeight;
-
-		// Send request to API
-		const response = await fetch("/api/chat", {
-			method: "POST",
-			headers: {
-				"Content-Type": "application/json",
-			},
-			body: JSON.stringify({
-				messages: chatHistory,
-			}),
-		});
-
-		// Handle errors
-		if (!response.ok) {
-			throw new Error("Failed to get response");
-		}
-		if (!response.body) {
-			throw new Error("Response body is null");
-		}
-
-		// Process streaming response
-		const reader = response.body.getReader();
-		const decoder = new TextDecoder();
-		let responseText = "";
-		let buffer = "";
-		const flushAssistantText = () => {
-			assistantTextEl.textContent = responseText;
-			chatMessages.scrollTop = chatMessages.scrollHeight;
-		};
-
-		let sawDone = false;
-		while (true) {
-			const { done, value } = await reader.read();
-
-			if (done) {
-				// Process any remaining complete events in buffer
-				const parsed = consumeSseEvents(buffer + "\n\n");
-				for (const data of parsed.events) {
-					if (data === "[DONE]") {
-						break;
-					}
-					try {
-						const jsonData = JSON.parse(data);
-						// Handle both Workers AI format (response) and OpenAI format (choices[0].delta.content)
-						let content = "";
-						if (
-							typeof jsonData.response === "string" &&
-							jsonData.response.length > 0
-						) {
-							content = jsonData.response;
-						} else if (jsonData.choices?.[0]?.delta?.content) {
-							content = jsonData.choices[0].delta.content;
-						}
-						if (content) {
-							responseText += content;
-							flushAssistantText();
-						}
-					} catch (e) {
-						console.error("Error parsing SSE data as JSON:", e, data);
-					}
-				}
-				break;
-			}
-
-			// Decode chunk
-			buffer += decoder.decode(value, { stream: true });
-			const parsed = consumeSseEvents(buffer);
-			buffer = parsed.buffer;
-			for (const data of parsed.events) {
-				if (data === "[DONE]") {
-					sawDone = true;
-					buffer = "";
-					break;
-				}
-				try {
-					const jsonData = JSON.parse(data);
-					// Handle both Workers AI format (response) and OpenAI format (choices[0].delta.content)
-					let content = "";
-					if (
-						typeof jsonData.response === "string" &&
-						jsonData.response.length > 0
-					) {
-						content = jsonData.response;
-					} else if (jsonData.choices?.[0]?.delta?.content) {
-						content = jsonData.choices[0].delta.content;
-					}
-					if (content) {
-						responseText += content;
-						flushAssistantText();
-					}
-				} catch (e) {
-					console.error("Error parsing SSE data as JSON:", e, data);
-				}
-			}
-			if (sawDone) {
-				break;
-			}
-		}
-
-		// Add completed response to chat history
-		if (responseText.length > 0) {
-			chatHistory.push({ role: "assistant", content: responseText });
-		}
-	} catch (error) {
-		console.error("Error:", error);
-		addMessageToChat(
-			"assistant",
-			"Sorry, there was an error processing your request.",
-		);
-	} finally {
-		// Hide typing indicator
-		typingIndicator.classList.remove("visible");
-
-		// Re-enable input
-		isProcessing = false;
-		userInput.disabled = false;
-		sendButton.disabled = false;
-		userInput.focus();
+// ---------- Show / hide welcome screen ----------
+function updateWelcomeScreen() {
+	// Hide welcome as soon as the user has interacted (chatHistory > 1)
+	if (chatHistory.length > 1) {
+		welcomeScreen.style.display = "none";
+	} else {
+		welcomeScreen.style.display = "flex";
 	}
 }
 
-/**
- * Helper function to add message to chat
- */
-function addMessageToChat(role, content) {
-	const messageEl = document.createElement("div");
-	messageEl.className = `message ${role}-message`;
-	messageEl.innerHTML = `<p>${content}</p>`;
-	chatMessages.appendChild(messageEl);
-
-	// Scroll to bottom
-	chatMessages.scrollTop = chatMessages.scrollHeight;
+// ---------- Scroll to bottom ----------
+function scrollToBottom() {
+	messageArea.scrollTop = messageArea.scrollHeight;
 }
 
+// ---------- Add a message bubble ----------
+function addMessageToChat(role, content) {
+	// `role` should be "user" or "bot" to match your CSS
+	const messageEl = document.createElement("div");
+	messageEl.className = `message ${role}`;
+	messageEl.textContent = content; // textContent is safer than innerHTML
+	messagesList.appendChild(messageEl);
+	scrollToBottom();
+	return messageEl;
+}
+
+// ---------- SSE parser ----------
 function consumeSseEvents(buffer) {
 	let normalized = buffer.replace(/\r/g, "");
 	const events = [];
@@ -228,3 +97,184 @@ function consumeSseEvents(buffer) {
 	}
 	return { events, buffer: normalized };
 }
+
+// ---------- Extract text from a streamed JSON chunk ----------
+function extractContent(jsonData) {
+	// Workers AI: { response: "..." }
+	if (typeof jsonData.response === "string" && jsonData.response.length > 0) {
+		return jsonData.response;
+	}
+	// OpenAI-style: { choices: [{ delta: { content: "..." } }] }
+	if (jsonData.choices?.[0]?.delta?.content) {
+		return jsonData.choices[0].delta.content;
+	}
+	// Some Workers AI streams send { response: "..." } inside "result"
+	if (typeof jsonData.result?.response === "string") {
+		return jsonData.result.response;
+	}
+	return "";
+}
+
+// ---------- Main send function ----------
+async function sendMessage() {
+	const message = userInput.value.trim();
+
+	// Don't send empty messages or while processing
+	if (message === "" || isProcessing) return;
+
+	// Lock UI
+	isProcessing = true;
+	userInput.disabled = true;
+	sendButton.disabled = true;
+
+	// Add user message to chat
+	addMessageToChat("user", message);
+
+	// Clear input
+	userInput.value = "";
+	userInput.style.height = "auto";
+
+	// Hide welcome screen on first user message
+	updateWelcomeScreen();
+
+	// Show typing indicator
+	typingIndicator.classList.add("visible");
+	scrollToBottom();
+
+	// Add to history
+	chatHistory.push({ role: "user", content: message });
+
+	try {
+		// Create the assistant bubble that we'll stream into
+		const assistantMessageEl = document.createElement("div");
+		assistantMessageEl.className = "message bot";
+		assistantMessageEl.textContent = "";
+		messagesList.appendChild(assistantMessageEl);
+		scrollToBottom();
+
+		// Send request
+		const response = await fetch("/api/chat", {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ messages: chatHistory }),
+		});
+
+		if (!response.ok) {
+			throw new Error(`Failed to get response (${response.status})`);
+		}
+		if (!response.body) {
+			throw new Error("Response body is null");
+		}
+
+		// Stream and parse
+		const reader = response.body.getReader();
+		const decoder = new TextDecoder();
+		let responseText = "";
+		let buffer = "";
+		let sawDone = false;
+
+		const flush = () => {
+			assistantMessageEl.textContent = responseText;
+			scrollToBottom();
+		};
+
+		while (true) {
+			const { done, value } = await reader.read();
+
+			if (done) {
+				// Flush any remaining complete events
+				const parsed = consumeSseEvents(buffer + "\n\n");
+				for (const data of parsed.events) {
+					if (data === "[DONE]") break;
+					try {
+						const content = extractContent(JSON.parse(data));
+						if (content) {
+							responseText += content;
+							flush();
+						}
+					} catch (e) {
+						console.error("Error parsing final SSE data:", e, data);
+					}
+				}
+				break;
+			}
+
+			// Decode chunk
+			buffer += decoder.decode(value, { stream: true });
+			const parsed = consumeSseEvents(buffer);
+			buffer = parsed.buffer;
+
+			for (const data of parsed.events) {
+				if (data === "[DONE]") {
+					sawDone = true;
+					buffer = "";
+					break;
+				}
+				try {
+					const content = extractContent(JSON.parse(data));
+					if (content) {
+						responseText += content;
+						flush();
+					}
+				} catch (e) {
+					console.error("Error parsing SSE data:", e, data);
+				}
+			}
+
+			if (sawDone) break;
+		}
+
+		// If nothing streamed, remove the empty bubble
+		if (responseText.length === 0) {
+			assistantMessageEl.textContent =
+				"⚠️ No response received from the model.";
+			responseText = assistantMessageEl.textContent;
+		}
+
+		// Save to history
+		chatHistory.push({ role: "assistant", content: responseText });
+	} catch (error) {
+		console.error("Error:", error);
+		// Replace / add an error bubble
+		const errorEl = document.createElement("div");
+		errorEl.className = "message bot";
+		errorEl.textContent =
+			"Sorry, there was an error processing your request.";
+		messagesList.appendChild(errorEl);
+		scrollToBottom();
+	} finally {
+		// Hide typing indicator
+		typingIndicator.classList.remove("visible");
+
+		// Re-enable input
+		isProcessing = false;
+		userInput.disabled = false;
+		sendButton.disabled = false;
+		updateSendButton();
+		userInput.focus();
+	}
+}
+
+// ---------- Copy button (for the code snippet in sidebar) ----------
+const copyBtn = document.getElementById("copyBtn");
+if (copyBtn) {
+	copyBtn.addEventListener("click", () => {
+		const codeElement = document.querySelector(".code-block code");
+		if (!codeElement) return;
+		navigator.clipboard
+			.writeText(codeElement.innerText)
+			.then(() => {
+				const original = copyBtn.textContent;
+				copyBtn.textContent = "Copied!";
+				setTimeout(() => (copyBtn.textContent = original), 1500);
+			})
+			.catch(() => alert("Press Ctrl+C to copy"));
+	});
+}
+
+// ---------- Init ----------
+(function init() {
+	updateWelcomeScreen();
+	updateSendButton();
+	userInput.focus();
+})();
