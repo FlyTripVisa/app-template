@@ -1,183 +1,650 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
-	<head>
-		<meta charset="UTF-8" />
-		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-		<title>LLM Chat App</title>
-		<style>
-			:root {
-				--primary-color: #f6821f;
-				--primary-hover: #e67e22;
-				--light-bg: #f9fafb;
-				--border-color: #e5e7eb;
-				--text-color: #1f2937;
-				--text-light: #6b7280;
-				--user-msg-bg: #fff2e6;
-				--assistant-msg-bg: #f3f4f6;
-			}
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI Worker Agent · Real-time chat</title>
+  <!-- Font Awesome for send icon (clean, no external JS) -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+  <style>
+    /* ----- RESET & GLOBAL ----- */
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
 
-			* {
-				box-sizing: border-box;
-				margin: 0;
-				padding: 0;
-			}
+    body {
+      font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+      background: #ffffff;
+      color: #111827;
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+    }
 
-			body {
-				font-family:
-					-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu,
-					Cantarell, sans-serif;
-				line-height: 1.6;
-				color: var(--text-color);
-				max-width: 800px;
-				margin: 0 auto;
-				padding: 1rem;
-			}
+    /* ----- LAYOUT (flex container mimicking original structure) ----- */
+    .app {
+      display: flex;
+      gap: 2.5rem;
+      min-height: 100vh;
+    }
 
-			header {
-				text-align: center;
-				margin-bottom: 2rem;
-				padding: 1rem 0;
-				border-bottom: 1px solid var(--border-color);
-			}
+    /* ----- LEFT SIDEBAND (hidden on mobile, 1/3 width on md+) ----- */
+    .sidebar {
+      display: none;
+      width: 33.333%;
+      justify-content: center;
+      align-items: center;
+      padding: 2.5rem;
+      background: white;
+    }
 
-			h1 {
-				font-size: 1.5rem;
-				color: var(--primary-color);
-			}
+    @media (min-width: 768px) {
+      .sidebar {
+        display: flex;
+      }
+    }
 
-			.chat-container {
-				display: flex;
-				flex-direction: column;
-				height: calc(100vh - 200px);
-				min-height: 400px;
-				border: 1px solid var(--border-color);
-				border-radius: 8px;
-				overflow: hidden;
-			}
+    .sidebar-content {
+      display: flex;
+      flex-direction: column;
+      gap: 2.5rem;
+      max-width: 28rem;
+      width: 100%;
+    }
 
-			.chat-messages {
-				flex: 1;
-				overflow-y: auto;
-				padding: 1rem;
-				background-color: var(--light-bg);
-			}
+    .gradient-title {
+      font-size: 3.75rem;
+      font-weight: 700;
+      line-height: 1.1;
+      background: linear-gradient(to right, #e711dd, #b5f2fd);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+      letter-spacing: -0.02em;
+    }
 
-			.message {
-				margin-bottom: 1rem;
-				padding: 0.75rem;
-				border-radius: 8px;
-				max-width: 80%;
-			}
+    .demo-title {
+      font-size: 1.5rem;
+      font-weight: 700;
+      margin-bottom: 1rem;
+      color: #111827;
+    }
 
-			.message p {
-				white-space: pre-line;
-				margin: 0;
-				overflow-wrap: anywhere;
-			}
+    .code-block-wrapper {
+      position: relative;
+    }
 
-			.user-message {
-				background-color: var(--user-msg-bg);
-				align-self: flex-end;
-				margin-left: auto;
-			}
+    .copy-btn {
+      position: absolute;
+      right: 0.5rem;
+      top: 0.5rem;
+      background: #3f3f46;
+      color: white;
+      border: none;
+      border-radius: 0.375rem;
+      padding: 0.25rem 0.75rem;
+      font-size: 0.875rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.2s;
+      z-index: 10;
+    }
 
-			.assistant-message {
-				background-color: var(--assistant-msg-bg);
-				align-self: flex-start;
-			}
+    .copy-btn:hover {
+      background: #52525b;
+    }
 
-			.message-input {
-				display: flex;
-				padding: 0.75rem;
-				border-top: 1px solid var(--border-color);
-				background-color: white;
-			}
+    .code-block {
+      overflow: hidden;
+      border-radius: 0.5rem;
+      border: 1px solid #3f3f46;
+      box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
+      background: #0a0a0a;
+    }
 
-			#user-input {
-				flex: 1;
-				padding: 0.75rem;
-				border: 1px solid var(--border-color);
-				border-radius: 4px;
-				font-family: inherit;
-				resize: none;
-				min-height: 44px;
-			}
+    .code-block code {
+      display: block;
+      padding: 1rem;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace;
+      font-size: 0.875rem;
+      color: #e4e4e7;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
 
-			#send-button {
-				margin-left: 0.5rem;
-				padding: 0 1rem;
-				background-color: var(--primary-color);
-				color: white;
-				border: none;
-				border-radius: 4px;
-				cursor: pointer;
-				transition: background-color 0.2s;
-			}
+    /* ----- RIGHT SIDE (CHAT PANEL) ----- */
+    .chat-panel {
+      width: 100%;
+      background: #ffffff;
+    }
 
-			#send-button:hover {
-				background-color: var(--primary-hover);
-			}
+    @media (min-width: 768px) {
+      .chat-panel {
+        width: 66.666%;
+        border-left: 1px solid #e5e7eb;
+      }
+    }
 
-			#send-button:disabled {
-				background-color: var(--text-light);
-				cursor: not-allowed;
-			}
+    .chat-container {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+      width: 100%;
+      max-width: 48rem;
+      height: 100vh;
+      margin: 0 auto;
+      overflow: hidden;
+      padding: 0;
+    }
 
-			.typing-indicator {
-				display: none;
-				font-style: italic;
-				color: var(--text-light);
-				padding: 1rem;
-			}
+    @media (min-width: 768px) {
+      .chat-container {
+        padding: 1.25rem;
+      }
+    }
 
-			.typing-indicator.visible {
-				display: block;
-			}
+    .chat-inner {
+      background: #ffffff;
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      flex: 1 1 0%;
+      min-height: 0;
+      gap: 1.5rem;
+      padding: 1rem;
+      padding-bottom: 0;
+    }
 
-			footer {
-				margin-top: 1rem;
-				text-align: center;
-				font-size: 0.85rem;
-				color: var(--text-light);
-			}
-		</style>
-	</head>
-	<body>
-		<header>
-			<h1>Cloudflare AI Chat</h1>
-			<p>Powered by Cloudflare Workers AI</p>
-		</header>
+    .message-area {
+      display: flex;
+      flex-direction: column;
+      flex: 1 1 0%;
+      min-height: 0;
+      gap: 1.25rem;
+      overflow-y: auto;
+    }
 
-		<div class="chat-container">
-			<div id="chat-messages" class="chat-messages">
-				<div class="message assistant-message">
-					<p>
-						Hello! I'm an LLM chat app powered by Cloudflare Workers AI. How can
-						I help you today?
-					</p>
-				</div>
-			</div>
+    .welcome-screen {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      height: 100%;
+      padding-top: 1rem;
+    }
 
-			<div class="typing-indicator" id="typing-indicator">
-				AI is thinking...
-			</div>
+    .welcome-line-1 {
+      font-size: 1.875rem;
+      font-weight: 700;
+      margin-bottom: 0.5rem;
+      animation: slide-up 0.5s ease-out forwards;
+      animation-delay: 0.1s;
+      opacity: 0;
+    }
 
-			<div class="message-input">
-				<textarea
-					id="user-input"
-					placeholder="Type your message here..."
-					rows="1"
-					autofocus
-				></textarea>
-				<button id="send-button">Send</button>
-			</div>
-		</div>
+    .welcome-line-2 {
+      font-size: 1.25rem;
+      color: #6b7280;
+      animation: slide-up 0.5s ease-out forwards;
+      animation-delay: 0.3s;
+      opacity: 0;
+    }
 
-		<footer>
-			<p>Cloudflare Workers AI Chat Template &copy; 2025</p>
-		</footer>
+    @keyframes slide-up {
+      from {
+        opacity: 0;
+        transform: translateY(20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
 
-		<!-- Chat app script -->
-		<script src="chat.js"></script>
-	</body>
+    .messages-list {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+      width: 100%;
+    }
+
+    .message {
+      display: flex;
+      flex-direction: column;
+      max-width: 85%;
+      padding: 0.75rem 1rem;
+      border-radius: 1rem;
+      font-size: 0.95rem;
+      line-height: 1.4;
+      word-break: break-word;
+      animation: fade-in 0.2s ease;
+      white-space: pre-wrap;
+    }
+
+    .message.user {
+      align-self: flex-end;
+      background: #2563eb;
+      color: white;
+      border-bottom-right-radius: 0.25rem;
+    }
+
+    .message.bot {
+      align-self: flex-start;
+      background: #f3f4f6;
+      color: #111827;
+      border-bottom-left-radius: 0.25rem;
+    }
+
+    @keyframes fade-in {
+      from { opacity: 0.6; transform: translateY(4px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .input-area {
+      background: #ffffff;
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+      gap: 1rem;
+      padding: 1rem;
+      padding-top: 0;
+    }
+
+    .chat-form {
+      position: relative;
+      display: flex;
+      gap: 0.5rem;
+    }
+
+    .chat-textarea {
+      border: 1px solid #e5e7eb;
+      background: #f9fafb;
+      height: 100px;
+      max-height: 400px;
+      min-height: 0;
+      flex: 1;
+      resize: none;
+      overflow-y: auto;
+      border-radius: 1rem;
+      padding: 1rem;
+      font-size: 0.875rem;
+      font-family: inherit;
+      color: #111827;
+      outline: none;
+      transition: border 0.2s, box-shadow 0.2s;
+    }
+
+    .chat-textarea:focus {
+      border-color: #3b82f6;
+      box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3);
+    }
+
+    .chat-textarea::placeholder {
+      color: #9ca3af;
+      font-weight: 400;
+    }
+
+    .chat-textarea:disabled {
+      cursor: not-allowed;
+      opacity: 0.6;
+    }
+
+    .send-button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      white-space: nowrap;
+      font-size: 0.875rem;
+      font-weight: 500;
+      background: #2563eb;
+      color: #ffffff;
+      border: none;
+      border-radius: 9999px;
+      width: 2.5rem;
+      height: 2.5rem;
+      position: absolute;
+      bottom: 0.5rem;
+      right: 0.5rem;
+      cursor: pointer;
+      transition: background 0.2s, opacity 0.2s;
+      padding: 0;
+    }
+
+    .send-button:hover:not(:disabled) {
+      background: #1d4ed8;
+    }
+
+    .send-button:disabled {
+      pointer-events: none;
+      opacity: 0.5;
+    }
+
+    .send-button i {
+      font-size: 1rem;
+      line-height: 1;
+    }
+
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      border: 0;
+    }
+
+    .typing-indicator {
+      display: none;
+      align-self: flex-start;
+      background: #f3f4f6;
+      padding: 0.75rem 1rem;
+      border-radius: 1rem;
+      border-bottom-left-radius: 0.25rem;
+      color: #6b7280;
+      font-style: italic;
+      font-size: 0.9rem;
+      max-width: 85%;
+    }
+
+    .typing-indicator.visible {
+      display: block;
+    }
+
+    .typing-indicator span {
+      display: inline-block;
+      animation: pulse 1.4s infinite ease-in-out;
+    }
+
+    .typing-indicator span:nth-child(1) { animation-delay: 0s; }
+    .typing-indicator span:nth-child(2) { animation-delay: 0.2s; }
+    .typing-indicator span:nth-child(3) { animation-delay: 0.4s; }
+
+    @keyframes pulse {
+      0%, 80%, 100% { opacity: 0.3; }
+      40% { opacity: 1; }
+    }
+
+    html, body, #root {
+      height: 100%;
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <!-- LEFT SIDEBAR (demo info) -->
+    <div class="sidebar">
+      <div class="sidebar-content">
+        <h1 class="gradient-title">AI Worker</h1>
+        <h2 class="demo-title">Real‑time Agent</h2>
+        <div class="code-block-wrapper">
+          <button class="copy-btn" type="button" id="copyBtn">Copy</button>
+          <pre class="code-block"><code>// Cloudflare AI Worker
+// real‑time chat backend
+export default {
+  async fetch(request, env) {
+    const { prompt } = await request.json();
+    const response = await env.AI.run(
+      '@cf/meta/llama-3-8b-instruct',
+      { prompt }
+    );
+    return Response.json({ response });
+  }
+}</code></pre>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT CHAT PANEL -->
+    <div class="chat-panel">
+      <div class="chat-container">
+        <div class="chat-inner">
+          <!-- Message area (welcome + chat) -->
+          <div class="message-area" id="messageArea">
+            <!-- Welcome screen (initially visible) -->
+            <div class="welcome-screen" id="welcomeScreen">
+              <p class="welcome-line-1">🤖 AI Worker active</p>
+              <p class="welcome-line-2">Ask me anything – I'm connected to the real-time agent.</p>
+            </div>
+            <!-- Dynamic messages will be inserted here -->
+            <div class="messages-list" id="messagesList"></div>
+            <!-- typing indicator -->
+            <div class="typing-indicator" id="typingIndicator">
+              <span>●</span> <span>●</span> <span>●</span> &nbsp;AI is thinking…
+            </div>
+          </div>
+
+          <!-- Input area -->
+          <div class="input-area">
+            <form class="chat-form" id="chatForm">
+              <textarea
+                class="chat-textarea"
+                name="input"
+                id="messageInput"
+                placeholder="Type a message..."
+                spellcheck="false"
+                rows="1"
+              ></textarea>
+              <button class="send-button" type="submit" id="sendButton" disabled>
+                <i class="fas fa-paper-plane"></i>
+                <span class="sr-only">Send</span>
+              </button>
+            </form>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (function() {
+      // ----- DOM refs -----
+      const messageArea = document.getElementById('messageArea');
+      const welcomeScreen = document.getElementById('welcomeScreen');
+      const messagesList = document.getElementById('messagesList');
+      const chatForm = document.getElementById('chatForm');
+      const messageInput = document.getElementById('messageInput');
+      const sendButton = document.getElementById('sendButton');
+      const copyBtn = document.getElementById('copyBtn');
+      const typingIndicator = document.getElementById('typingIndicator');
+
+      // ----- Chat state -----
+      let messages = []; // { role: 'user' | 'bot', content: string }
+      let isSending = false;
+
+      // ----- *** REPLACE THIS WITH YOUR REAL WORKER ENDPOINT *** -----
+      // Example: 'https://your-worker.your-subdomain.workers.dev/'
+      // For testing we use a local mock (simulated AI) but you can swap it.
+      const USE_MOCK = true; // set to false and fill WORKER_URL for real AI
+
+      // ⚠️ IMPORTANT: Replace with your actual Cloudflare Worker URL if USE_MOCK = false
+      const WORKER_URL = 'https://your-ai-worker.example.workers.dev/';
+
+      // ----- Helper: update UI based on messages & welcome visibility -----
+      function renderMessages() {
+        // If there are messages, hide welcome screen; else show it.
+        if (messages.length > 0) {
+          welcomeScreen.style.display = 'none';
+        } else {
+          welcomeScreen.style.display = 'flex';
+        }
+
+        // Clear message list and re-render
+        messagesList.innerHTML = '';
+        messages.forEach((msg) => {
+          const messageDiv = document.createElement('div');
+          messageDiv.className = `message ${msg.role}`;
+          messageDiv.textContent = msg.content;
+          messagesList.appendChild(messageDiv);
+        });
+
+        // Scroll to bottom (if messages exist)
+        if (messages.length > 0) {
+          messageArea.scrollTop = messageArea.scrollHeight;
+        }
+      }
+
+      // ----- Add a message and re-render -----
+      function addMessage(role, content) {
+        messages.push({ role, content });
+        renderMessages();
+      }
+
+      // ----- Show/hide typing indicator -----
+      function setTyping(visible) {
+        if (visible) {
+          typingIndicator.classList.add('visible');
+          // Scroll to show typing indicator
+          messageArea.scrollTop = messageArea.scrollHeight;
+        } else {
+          typingIndicator.classList.remove('visible');
+        }
+      }
+
+      // ----- Enable/disable send button based on input -----
+      function updateSendButton() {
+        const hasText = messageInput.value.trim().length > 0;
+        sendButton.disabled = !hasText || isSending;
+      }
+
+      // ----- REAL AI CALL via fetch to Cloudflare Worker (or any endpoint) -----
+      async function fetchAIResponse(userMessage) {
+        // If mock is enabled, return simulated response after a short delay
+        if (USE_MOCK) {
+          return new Promise((resolve) => {
+            setTimeout(() => {
+              // Simple rule-based mock (feel free to modify)
+              const lower = userMessage.toLowerCase();
+              let reply;
+              if (lower.includes('hello') || lower.includes('hi')) {
+                reply = 'Hello! I am your AI worker agent. How can I help you today?';
+              } else if (lower.includes('how are you')) {
+                reply = 'I am running in the cloud, feeling electric! ⚡ Thanks for asking.';
+              } else if (lower.includes('bye')) {
+                reply = 'Goodbye! Feel free to return anytime. 👋';
+              } else if (lower.includes('?')) {
+                reply = `That's a great question: "${userMessage}". In a real deployment, I'd use the LLM to answer.`;
+              } else {
+                reply = `You said: "${userMessage}". (This is a simulated real-time response from the AI worker.)`;
+              }
+              resolve(reply);
+            }, 600 + Math.random() * 800); // simulate network latency
+          });
+        }
+
+        // --- Real fetch to your worker ---
+        try {
+          const response = await fetch(WORKER_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ prompt: userMessage })
+          });
+
+          if (!response.ok) {
+            throw new Error(`Worker responded with ${response.status}`);
+          }
+
+          const data = await response.json();
+          // Adjust based on your worker's response shape:
+          // Common patterns: { response: "..." } or { result: "..." } or direct text.
+          // We'll try to extract the text intelligently.
+          if (typeof data === 'string') return data;
+          if (data.response) return data.response;
+          if (data.result) return data.result;
+          if (data.text) return data.text;
+          return JSON.stringify(data); // fallback
+
+        } catch (error) {
+          console.error('AI worker error:', error);
+          return `⚠️ Sorry, I couldn't reach the AI worker. Error: ${error.message}`;
+        }
+      }
+
+      // ----- Handle form submit (real-time AI call) -----
+      async function handleSubmit(e) {
+        e.preventDefault();
+
+        const text = messageInput.value.trim();
+        if (!text || isSending) return;
+
+        // 1. Add user message and clear input
+        addMessage('user', text);
+        messageInput.value = '';
+        updateSendButton();
+
+        // 2. Disable sending, show typing indicator
+        isSending = true;
+        sendButton.disabled = true;
+        setTyping(true);
+
+        try {
+          // 3. Call the AI worker (real or mock)
+          const botReply = await fetchAIResponse(text);
+          // 4. Add bot reply
+          addMessage('bot', botReply);
+        } catch (err) {
+          addMessage('bot', '⚠️ Unexpected error. Please try again.');
+        } finally {
+          // 5. Cleanup: hide typing, re-enable sending
+          setTyping(false);
+          isSending = false;
+          updateSendButton();
+          messageInput.focus();
+        }
+      }
+
+      // ----- Copy code snippet (simple) -----
+      function handleCopy() {
+        const codeElement = document.querySelector('.code-block code');
+        if (!codeElement) return;
+        const textToCopy = codeElement.innerText;
+
+        navigator.clipboard.writeText(textToCopy).then(() => {
+          const originalText = copyBtn.textContent;
+          copyBtn.textContent = 'Copied!';
+          setTimeout(() => {
+            copyBtn.textContent = originalText;
+          }, 1500);
+        }).catch(() => {
+          alert('Press Ctrl+C to copy (or Cmd+C on Mac)');
+        });
+      }
+
+      // ----- Initialize event listeners -----
+      function init() {
+        // Input events
+        messageInput.addEventListener('input', updateSendButton);
+        updateSendButton();
+
+        // Form submit
+        chatForm.addEventListener('submit', handleSubmit);
+
+        // Enter to submit (Shift+Enter for new line)
+        messageInput.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            if (!sendButton.disabled) {
+              chatForm.dispatchEvent(new Event('submit'));
+            }
+          }
+        });
+
+        // Copy button
+        copyBtn.addEventListener('click', handleCopy);
+
+        // Initial render
+        renderMessages();
+        messageInput.focus();
+      }
+
+      // Run init when DOM is ready
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+      } else {
+        init();
+      }
+    })();
+  </script>
+</body>
 </html>
