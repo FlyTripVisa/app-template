@@ -1,204 +1,187 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AI Worker Agent · Real-time chat</title>
-  <!-- Font Awesome for send icon (clean, no external JS) -->
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#000000">
+  <meta name="color-scheme" content="dark">
+  <meta name="description" content="Real-time AI chat powered by Cloudflare Workers AI">
+  <title>AI Worker Agent · Real-time Chat</title>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+
   <style>
-    /* ----- RESET & GLOBAL ----- */
+    :root {
+      color-scheme: dark;
+      --bg: #000;
+      --panel: #090909;
+      --surface: #141414;
+      --border: #303030;
+      --text: #f9fafb;
+      --muted: #a1a1aa;
+      --blue: #2563eb;
+    }
+
     * {
+      box-sizing: border-box;
       margin: 0;
       padding: 0;
-      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    html, body {
+      width: 100%;
+      min-height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
     }
 
     body {
-      font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
-      background: #ffffff;
-      color: #111827;
-      line-height: 1.3;
+      min-height: 100vh;
+      min-height: 100dvh;
+      overflow: hidden;
       -webkit-font-smoothing: antialiased;
     }
 
-    /* ----- LAYOUT (flex container mimicking original structure) ----- */
+    button, textarea { font: inherit; }
+    button { touch-action: manipulation; }
+
     .app {
       display: flex;
-      gap: 2.3rem;
+      width: 100%;
       min-height: 100vh;
+      min-height: 100dvh;
+      background: var(--bg);
     }
 
-    /* ----- LEFT SIDEBAND (hidden on mobile, 1/3 width on md+) ----- */
     .sidebar {
       display: none;
       width: 33.333%;
-      justify-content: center;
+      flex-shrink: 0;
       align-items: center;
-      padding: 2.5rem;
-      background: white;
-    }
-
-    @media (min-width: 768px) {
-      .sidebar {
-        display: flex;
-      }
+      justify-content: center;
+      padding: 2rem;
+      background: var(--panel);
     }
 
     .sidebar-content {
       display: flex;
       flex-direction: column;
-      gap: 2.5rem;
-      max-width: 28rem;
+      gap: 1.5rem;
       width: 100%;
+      max-width: 28rem;
     }
 
     .gradient-title {
-      font-size: 3.75rem;
-      font-weight: 700;
+      font-size: clamp(2.5rem, 4vw, 3.75rem);
+      font-weight: 800;
       line-height: 1.1;
-      background: linear-gradient(to right, #e711dd, #b5f2fd);
+      letter-spacing: -.04em;
+      background: linear-gradient(90deg, #e711dd, #8888ff, #5ce8f2);
       -webkit-background-clip: text;
       background-clip: text;
       color: transparent;
-      letter-spacing: -0.02em;
     }
 
-    .demo-title {
-      font-size: 1.5rem;
-      font-weight: 700;
-      margin-bottom: 1rem;
-      color: #111827;
-    }
+    .demo-title { font-size: 1.5rem; }
+    .sidebar-description { color: var(--muted); line-height: 1.7; }
 
-    .code-block-wrapper {
-      position: relative;
-    }
+    .code-block-wrapper { position: relative; }
 
     .copy-btn {
       position: absolute;
-      right: 0.5rem;
-      top: 0.5rem;
-      background: #3f3f46;
+      top: .5rem;
+      right: .5rem;
+      padding: .4rem .75rem;
+      border: 1px solid #444;
+      border-radius: .5rem;
+      background: #252525;
       color: white;
-      border: none;
-      border-radius: 0.375rem;
-      padding: 0.25rem 0.75rem;
-      font-size: 0.875rem;
-      font-weight: 500;
       cursor: pointer;
-      transition: background 0.2s;
-      z-index: 10;
-    }
-
-    .copy-btn:hover {
-      background: #52525b;
     }
 
     .code-block {
-      overflow: hidden;
-      border-radius: 0.5rem;
-      border: 1px solid #3f3f46;
-      box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
-      background: #0a0a0a;
+      overflow: auto;
+      border: 1px solid var(--border);
+      border-radius: .75rem;
+      background: #050505;
     }
 
     .code-block code {
       display: block;
-      padding: 1rem;
-      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace;
-      font-size: 0.875rem;
-      color: #e4e4e7;
+      padding: 3.5rem 1rem 1rem;
+      color: #d4d4d8;
+      font: .8rem/1.7 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
       white-space: pre-wrap;
-      word-break: break-word;
+      overflow-wrap: anywhere;
     }
 
-    /* ----- RIGHT SIDE (CHAT PANEL) ----- */
     .chat-panel {
+      display: flex;
+      flex: 1;
+      flex-direction: column;
       width: 100%;
-      background: #ffffff;
-    }
-
-    @media (min-width: 768px) {
-      .chat-panel {
-        width: 66.666%;
-        border-left: 1px solid #e5e7eb;
-      }
+      min-width: 0;
+      background: var(--bg);
     }
 
     .chat-container {
       display: flex;
       flex-direction: column;
-      gap: 1rem;
       width: 100%;
       max-width: 48rem;
       height: 100vh;
+      height: 100dvh;
+      min-height: 0;
       margin: 0 auto;
       overflow: hidden;
-      padding: 0;
-    }
-
-    @media (min-width: 768px) {
-      .chat-container {
-        padding: 1.25rem;
-      }
     }
 
     .chat-inner {
-      background: #ffffff;
-      position: relative;
       display: flex;
+      flex: 1;
       flex-direction: column;
-      flex: 1 1 0%;
+      min-width: 0;
       min-height: 0;
-      gap: 1.5rem;
+      gap: 1rem;
       padding: 1rem;
       padding-bottom: 0;
     }
 
     .message-area {
       display: flex;
+      flex: 1;
       flex-direction: column;
-      flex: 1 1 0%;
+      min-width: 0;
       min-height: 0;
-      gap: 1.25rem;
+      gap: 1rem;
       overflow-y: auto;
+      padding-bottom: 1rem;
+      overscroll-behavior: contain;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: thin;
+      scrollbar-color: #444 #000;
     }
 
     .welcome-screen {
       display: flex;
+      flex: 1;
       flex-direction: column;
       justify-content: center;
-      height: 100%;
-      padding-top: 1rem;
+      min-height: 180px;
+      gap: .5rem;
     }
 
     .welcome-line-1 {
-      font-size: 1.875rem;
+      font-size: clamp(1.5rem, 5vw, 1.875rem);
       font-weight: 700;
-      margin-bottom: 0.5rem;
-      animation: slide-up 0.5s ease-out forwards;
-      animation-delay: 0.1s;
-      opacity: 0;
     }
 
     .welcome-line-2 {
-      font-size: 1.25rem;
-      color: #6b7280;
-      animation: slide-up 0.5s ease-out forwards;
-      animation-delay: 0.3s;
-      opacity: 0;
-    }
-
-    @keyframes slide-up {
-      from {
-        opacity: 0;
-        transform: translateY(20px);
-      }
-      to {
-        opacity: 1;
-        transform: translateY(0);
-      }
+      color: var(--muted);
+      font-size: clamp(1rem, 3.5vw, 1.2rem);
+      line-height: 1.6;
     }
 
     .messages-list {
@@ -209,120 +192,119 @@
     }
 
     .message {
-      display: flex;
-      flex-direction: column;
-      max-width: 85%;
-      padding: 0.75rem 1rem;
+      max-width: 90%;
+      padding: .8rem 1rem;
       border-radius: 1rem;
-      font-size: 0.95rem;
-      line-height: 1.4;
-      word-break: break-word;
-      animation: fade-in 0.2s ease;
+      font-size: .95rem;
+      line-height: 1.6;
       white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      animation: fade-in .2s ease;
     }
 
     .message.user {
       align-self: flex-end;
-      background: #2563eb;
+      background: var(--blue);
       color: white;
-      border-bottom-right-radius: 0.25rem;
+      border-bottom-right-radius: .25rem;
     }
 
     .message.bot {
       align-self: flex-start;
-      background: #f3f4f6;
-      color: #111827;
-      border-bottom-left-radius: 0.25rem;
+      background: var(--surface);
+      border: 1px solid #292929;
+      color: var(--text);
+      border-bottom-left-radius: .25rem;
+    }
+
+    .message.error {
+      border-color: #7f1d1d;
+      color: #fecaca;
     }
 
     @keyframes fade-in {
-      from { opacity: 0.6; transform: translateY(4px); }
+      from { opacity: .5; transform: translateY(4px); }
       to { opacity: 1; transform: translateY(0); }
     }
 
-    .input-area {
-      background: #ffffff;
-      display: flex;
-      flex-direction: column;
-      flex-shrink: 0;
-      gap: 1rem;
-      padding: 1rem;
-      padding-top: 0;
+    .typing-indicator {
+      display: none;
+      align-self: flex-start;
+      padding: .75rem 1rem;
+      border-radius: 1rem;
+      background: var(--surface);
+      color: var(--muted);
     }
 
-    .chat-form {
-      position: relative;
-      display: flex;
-      gap: 0.5rem;
+    .typing-indicator.visible { display: block; }
+
+    .typing-indicator span {
+      display: inline-block;
+      animation: pulse 1.4s infinite ease-in-out;
     }
+
+    .typing-indicator span:nth-child(2) { animation-delay: .2s; }
+    .typing-indicator span:nth-child(3) { animation-delay: .4s; }
+
+    @keyframes pulse {
+      0%, 80%, 100% { opacity: .3; }
+      40% { opacity: 1; }
+    }
+
+    .input-area {
+      flex-shrink: 0;
+      padding: .75rem 0 max(.75rem, env(safe-area-inset-bottom));
+      background: var(--bg);
+    }
+
+    .chat-form { position: relative; display: flex; width: 100%; }
 
     .chat-textarea {
-      border: 1px solid #e5e7eb;
-      background: #f9fafb;
-      height: 100px;
-      max-height: 400px;
-      min-height: 0;
+      display: block;
       flex: 1;
+      width: 100%;
+      min-width: 0;
+      height: 5rem;
+      min-height: 3.5rem;
+      max-height: 220px;
       resize: none;
       overflow-y: auto;
+      padding: .9rem 3.5rem .9rem 1rem;
+      border: 1px solid #333;
       border-radius: 1rem;
-      padding: 1rem;
-      font-size: 0.875rem;
-      font-family: inherit;
-      color: #111827;
       outline: none;
-      transition: border 0.2s, box-shadow 0.2s;
+      background: #111;
+      color: white;
+      font-size: 16px;
+      line-height: 1.5;
+      appearance: none;
     }
 
     .chat-textarea:focus {
       border-color: #3b82f6;
-      box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3);
+      box-shadow: 0 0 0 2px rgb(59 130 246 / 20%);
     }
 
-    .chat-textarea::placeholder {
-      color: #9ca3af;
-      font-weight: 400;
-    }
-
-    .chat-textarea:disabled {
-      cursor: not-allowed;
-      opacity: 0.6;
-    }
+    .chat-textarea::placeholder { color: #a1a1aa; }
 
     .send-button {
-      display: inline-flex;
+      position: absolute;
+      right: .5rem;
+      bottom: .5rem;
+      display: flex;
+      width: 2.75rem;
+      height: 2.75rem;
       align-items: center;
       justify-content: center;
-      white-space: nowrap;
-      font-size: 0.875rem;
-      font-weight: 500;
-      background: #2563eb;
-      color: #ffffff;
-      border: none;
-      border-radius: 9999px;
-      width: 2.5rem;
-      height: 2.5rem;
-      position: absolute;
-      bottom: 0.5rem;
-      right: 0.5rem;
+      border: 0;
+      border-radius: 50%;
+      background: var(--blue);
+      color: white;
       cursor: pointer;
-      transition: background 0.2s, opacity 0.2s;
-      padding: 0;
     }
 
-    .send-button:hover:not(:disabled) {
-      background: #1d4ed8;
-    }
-
-    .send-button:disabled {
-      pointer-events: none;
-      opacity: 0.5;
-    }
-
-    .send-button i {
-      font-size: 1rem;
-      line-height: 1;
-    }
+    .send-button:disabled { opacity: .45; cursor: not-allowed; }
+    .send-button:hover:not(:disabled) { background: #1d4ed8; }
 
     .sr-only {
       position: absolute;
@@ -332,319 +314,103 @@
       margin: -1px;
       overflow: hidden;
       clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
       border: 0;
     }
 
-    .typing-indicator {
-      display: none;
-      align-self: flex-start;
-      background: #f3f4f6;
-      padding: 0.75rem 1rem;
-      border-radius: 1rem;
-      border-bottom-left-radius: 0.25rem;
-      color: #6b7280;
-      font-style: italic;
-      font-size: 0.9rem;
-      max-width: 85%;
+    @media (min-width: 768px) {
+      .sidebar { display: flex; }
+      .chat-panel { width: 66.667%; border-left: 1px solid #262626; }
+      .chat-container { padding: 1rem; }
     }
 
-    .typing-indicator.visible {
-      display: block;
+    @media (max-width: 767px) {
+      .sidebar { display: none; }
+      .chat-container { max-width: none; }
+      .chat-inner { gap: .75rem; padding: .75rem .65rem 0; }
+      .message { max-width: 93%; padding: .7rem .85rem; }
+      .message-area { gap: .875rem; }
     }
 
-    .typing-indicator span {
-      display: inline-block;
-      animation: pulse 1.4s infinite ease-in-out;
+    @media (max-width: 360px) {
+      .chat-inner { padding-right: .5rem; padding-left: .5rem; }
+      .message { max-width: 96%; }
     }
 
-    .typing-indicator span:nth-child(1) { animation-delay: 0s; }
-    .typing-indicator span:nth-child(2) { animation-delay: 0.2s; }
-    .typing-indicator span:nth-child(3) { animation-delay: 0.4s; }
-
-    @keyframes pulse {
-      0%, 80%, 100% { opacity: 0.3; }
-      40% { opacity: 1; }
-    }
-
-    html, body, #root {
-      height: 100%;
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: .01ms !important;
+        transition-duration: .01ms !important;
+      }
     }
   </style>
 </head>
+
 <body>
   <div class="app">
-    <!-- LEFT SIDEBAR (demo info) -->
-    <div class="sidebar">
+    <aside class="sidebar">
       <div class="sidebar-content">
         <h1 class="gradient-title">AI Worker</h1>
-        <h2 class="demo-title">Real‑time Agent</h2>
+        <h2 class="demo-title">Real-time Agent</h2>
+        <p class="sidebar-description">
+          Your AI assistant is powered by Cloudflare Workers AI.
+          Send a message and receive a live response.
+        </p>
+
         <div class="code-block-wrapper">
-          <button class="copy-btn" type="button" id="copyBtn">Copy</button>
-          <pre class="code-block"><code>// Cloudflare AI Worker
-// real‑time chat backend
-export default {
-  async fetch(request, env) {
-    const { prompt } = await request.json();
-    const response = await env.AI.run(
-      '@cf/meta/llama-3-8b-instruct',
-      { prompt }
-    );
-    return Response.json({ response });
-  }
-}</code></pre>
+          <button class="copy-btn" id="copyBtn" type="button">Copy</button>
+          <pre class="code-block"><code>// Cloudflare Workers AI
+// POST /api/chat
+// Streaming Server-Sent Events</code></pre>
         </div>
       </div>
-    </div>
+    </aside>
 
-    <!-- RIGHT CHAT PANEL -->
-    <div class="chat-panel">
+    <main class="chat-panel">
       <div class="chat-container">
         <div class="chat-inner">
-          <!-- Message area (welcome + chat) -->
-          <div class="message-area" id="messageArea">
-            <!-- Welcome screen (initially visible) -->
+          <section class="message-area" id="messageArea" aria-label="Chat messages">
             <div class="welcome-screen" id="welcomeScreen">
               <p class="welcome-line-1">🤖 AI Worker active</p>
-              <p class="welcome-line-2">Ask me anything – I'm connected to the real-time agent.</p>
+              <p class="welcome-line-2">
+                Ask me anything — I'm connected to the real-time agent.
+              </p>
             </div>
-            <!-- Dynamic messages will be inserted here -->
-            <div class="messages-list" id="messagesList"></div>
-            <!-- typing indicator -->
-            <div class="typing-indicator" id="typingIndicator">
-              <span>●</span> <span>●</span> <span>●</span> &nbsp;AI is thinking…
-            </div>
-          </div>
 
-          <!-- Input area -->
-          <div class="input-area">
+            <div class="messages-list" id="messagesList"></div>
+
+            <div class="typing-indicator" id="typingIndicator" role="status">
+              <span>●</span> <span>●</span> <span>●</span>
+              &nbsp; AI is thinking…
+            </div>
+          </section>
+
+          <section class="input-area">
             <form class="chat-form" id="chatForm">
+              <label for="messageInput" class="sr-only">Your message</label>
               <textarea
                 class="chat-textarea"
                 name="input"
                 id="messageInput"
                 placeholder="Type a message..."
-                spellcheck="false"
                 rows="1"
+                maxlength="12000"
+                enterkeyhint="send"
+                autocomplete="off"
+                required
               ></textarea>
-              <button class="send-button" type="submit" id="sendButton" disabled>
-                <i class="fas fa-paper-plane"></i>
+
+              <button class="send-button" type="submit" id="sendButton" disabled aria-label="Send message">
+                <i class="fas fa-paper-plane" aria-hidden="true"></i>
                 <span class="sr-only">Send</span>
               </button>
             </form>
-          </div>
+          </section>
         </div>
       </div>
-    </div>
+    </main>
   </div>
 
-  <script>
-    (function() {
-      // ----- DOM refs -----
-      const messageArea = document.getElementById('messageArea');
-      const welcomeScreen = document.getElementById('welcomeScreen');
-      const messagesList = document.getElementById('messagesList');
-      const chatForm = document.getElementById('chatForm');
-      const messageInput = document.getElementById('messageInput');
-      const sendButton = document.getElementById('sendButton');
-      const copyBtn = document.getElementById('copyBtn');
-      const typingIndicator = document.getElementById('typingIndicator');
-
-      // ----- Chat state -----
-      let messages = []; // { role: 'user' | 'bot', content: string }
-      let isSending = false;
-
-      // ----- *** REPLACE THIS WITH YOUR REAL WORKER ENDPOINT *** -----
-      // Example: 'https://your-worker.your-subdomain.workers.dev/'
-      // For testing we use a local mock (simulated AI) but you can swap it.
-      const USE_MOCK = true; // set to false and fill WORKER_URL for real AI
-
-      // ⚠️ IMPORTANT: Replace with your actual Cloudflare Worker URL if USE_MOCK = false
-      const WORKER_URL = 'https://your-ai-worker.example.workers.dev/';
-
-      // ----- Helper: update UI based on messages & welcome visibility -----
-      function renderMessages() {
-        // If there are messages, hide welcome screen; else show it.
-        if (messages.length > 0) {
-          welcomeScreen.style.display = 'none';
-        } else {
-          welcomeScreen.style.display = 'flex';
-        }
-
-        // Clear message list and re-render
-        messagesList.innerHTML = '';
-        messages.forEach((msg) => {
-          const messageDiv = document.createElement('div');
-          messageDiv.className = `message ${msg.role}`;
-          messageDiv.textContent = msg.content;
-          messagesList.appendChild(messageDiv);
-        });
-
-        // Scroll to bottom (if messages exist)
-        if (messages.length > 0) {
-          messageArea.scrollTop = messageArea.scrollHeight;
-        }
-      }
-
-      // ----- Add a message and re-render -----
-      function addMessage(role, content) {
-        messages.push({ role, content });
-        renderMessages();
-      }
-
-      // ----- Show/hide typing indicator -----
-      function setTyping(visible) {
-        if (visible) {
-          typingIndicator.classList.add('visible');
-          // Scroll to show typing indicator
-          messageArea.scrollTop = messageArea.scrollHeight;
-        } else {
-          typingIndicator.classList.remove('visible');
-        }
-      }
-
-      // ----- Enable/disable send button based on input -----
-      function updateSendButton() {
-        const hasText = messageInput.value.trim().length > 0;
-        sendButton.disabled = !hasText || isSending;
-      }
-
-      // ----- REAL AI CALL via fetch to Cloudflare Worker (or any endpoint) -----
-      async function fetchAIResponse(userMessage) {
-        // If mock is enabled, return simulated response after a short delay
-        if (USE_MOCK) {
-          return new Promise((resolve) => {
-            setTimeout(() => {
-              // Simple rule-based mock (feel free to modify)
-              const lower = userMessage.toLowerCase();
-              let reply;
-              if (lower.includes('hello') || lower.includes('hi')) {
-                reply = 'Hello! I am your AI worker agent. How can I help you today?';
-              } else if (lower.includes('how are you')) {
-                reply = 'I am running in the cloud, feeling electric! ⚡ Thanks for asking.';
-              } else if (lower.includes('bye')) {
-                reply = 'Goodbye! Feel free to return anytime. 👋';
-              } else if (lower.includes('?')) {
-                reply = `That's a great question: "${userMessage}". In a real deployment, I'd use the LLM to answer.`;
-              } else {
-                reply = `You said: "${userMessage}". (This is a simulated real-time response from the AI worker.)`;
-              }
-              resolve(reply);
-            }, 600 + Math.random() * 800); // simulate network latency
-          });
-        }
-
-        // --- Real fetch to your worker ---
-        try {
-          const response = await fetch(WORKER_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ prompt: userMessage })
-          });
-
-          if (!response.ok) {
-            throw new Error(`Worker responded with ${response.status}`);
-          }
-
-          const data = await response.json();
-          // Adjust based on your worker's response shape:
-          // Common patterns: { response: "..." } or { result: "..." } or direct text.
-          // We'll try to extract the text intelligently.
-          if (typeof data === 'string') return data;
-          if (data.response) return data.response;
-          if (data.result) return data.result;
-          if (data.text) return data.text;
-          return JSON.stringify(data); // fallback
-
-        } catch (error) {
-          console.error('AI worker error:', error);
-          return `⚠️ Sorry, I couldn't reach the AI worker. Error: ${error.message}`;
-        }
-      }
-
-      // ----- Handle form submit (real-time AI call) -----
-      async function handleSubmit(e) {
-        e.preventDefault();
-
-        const text = messageInput.value.trim();
-        if (!text || isSending) return;
-
-        // 1. Add user message and clear input
-        addMessage('user', text);
-        messageInput.value = '';
-        updateSendButton();
-
-        // 2. Disable sending, show typing indicator
-        isSending = true;
-        sendButton.disabled = true;
-        setTyping(true);
-
-        try {
-          // 3. Call the AI worker (real or mock)
-          const botReply = await fetchAIResponse(text);
-          // 4. Add bot reply
-          addMessage('bot', botReply);
-        } catch (err) {
-          addMessage('bot', '⚠️ Unexpected error. Please try again.');
-        } finally {
-          // 5. Cleanup: hide typing, re-enable sending
-          setTyping(false);
-          isSending = false;
-          updateSendButton();
-          messageInput.focus();
-        }
-      }
-
-      // ----- Copy code snippet (simple) -----
-      function handleCopy() {
-        const codeElement = document.querySelector('.code-block code');
-        if (!codeElement) return;
-        const textToCopy = codeElement.innerText;
-
-        navigator.clipboard.writeText(textToCopy).then(() => {
-          const originalText = copyBtn.textContent;
-          copyBtn.textContent = 'Copied!';
-          setTimeout(() => {
-            copyBtn.textContent = originalText;
-          }, 1500);
-        }).catch(() => {
-          alert('Press Ctrl+C to copy (or Cmd+C on Mac)');
-        });
-      }
-
-      // ----- Initialize event listeners -----
-      function init() {
-        // Input events
-        messageInput.addEventListener('input', updateSendButton);
-        updateSendButton();
-
-        // Form submit
-        chatForm.addEventListener('submit', handleSubmit);
-
-        // Enter to submit (Shift+Enter for new line)
-        messageInput.addEventListener('keydown', (e) => {
-          if (e.key === 'Enter' && !e.shiftKey) {
-            e.preventDefault();
-            if (!sendButton.disabled) {
-              chatForm.dispatchEvent(new Event('submit'));
-            }
-          }
-        });
-
-        // Copy button
-        copyBtn.addEventListener('click', handleCopy);
-
-        // Initial render
-        renderMessages();
-        messageInput.focus();
-      }
-
-      // Run init when DOM is ready
-      if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', init);
-      } else {
-        init();
-      }
-    })();
-  </script>
+  <script src="/chat.js" defer></script>
 </body>
 </html>
