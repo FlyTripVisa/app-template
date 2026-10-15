@@ -1,3 +1,4 @@
+
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "app-template",
@@ -5,30 +6,40 @@
   "compatibility_date": "2026-10-06",
   "compatibility_flags": ["nodejs_compat"],
 
-  // Static assets (index.html + chat.js in ./public)
   "assets": {
     "directory": "./public",
     "binding": "ASSETS",
     "not_found_handling": "single-page-application"
   },
 
-  // Workers AI binding — gives you env.AI
   "ai": {
     "binding": "AI"
   },
 
-  // Live logs & metrics in the Cloudflare dashboard
   "observability": {
     "enabled": true
   },
 
-  // Optional: keep an eye on CPU usage
   "limits": {
     "cpu_ms": 30000
   },
 
-  // Optional: dev-only settings
   "dev": {
     "port": 8787
-  }
+  },
+
+  "r2_buckets": [
+    {
+      "binding": "bucketR2",
+      "bucket_name": "ai-chat"
+    }
+  ],
+
+  "d1_databases": [
+    {
+      "binding": "D1",
+      "database_name": "flytripvisa-db",
+      "database_id": "f274effd-ff6e-4c75-b8a8-4083726232fe"
+    }
+  ]
 }
